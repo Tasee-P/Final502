@@ -1,0 +1,158 @@
+---
+title: "BarFigure_MidIncome_OADR_Phacha"
+author: "Phacha"
+date: "2026-04-14"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Middle-Income Dependency Ratio Analysis
+
+```{r wealth-bar-chart, fig.width=16, fig.height=18, warning=FALSE, message=FALSE}
+# load
+library(tidyverse)
+
+# path
+path_pop9 <- '/Users/phacha/Documents/R Projects/Final/POP_DPND.csv'
+path_gni9 <- '/Users/phacha/Documents/R Projects/Final/API_NY.GNP.PCAP.CD_DS2_en_csv_v2_230.csv'
+
+# data need
+df_pop9 <- read_csv(path_pop9, skip = 4, show_col_types = FALSE)
+df_gni9 <- read_csv(path_gni9, skip = 4, show_col_types = FALSE)
+
+target_year9 <- "2024"
+
+# clean Pop Data
+pop_clean9 <- df_pop9 %>%
+  select(`Country Code`, `Country Name`, all_of(target_year9)) %>%
+  rename(Age_Dependency = all_of(target_year9))
+
+# clean GNI Data
+gni_clean9 <- df_gni9 %>%
+  select(`Country Code`, all_of(target_year9)) %>%
+  rename(GNI_per_capita = all_of(target_year9))
+
+# create a list of World Bank regional aggregates to drop 
+aggregates_to_drop <- c(
+  "Europe & Central Asia (IDA & IBRD countries)", "Late-demographic dividend", 
+  "East Asia & Pacific", "East Asia & Pacific (excluding high income)", 
+  "East Asia & Pacific (IDA & IBRD countries)", "Upper middle income", 
+  "Europe & Central Asia (excluding high income)", "IBRD only", 
+  "Low & middle income", "Lower middle income", "Middle income", 
+  "Low income", "Post-demographic dividend", "Pre-demographic dividend", 
+  "Early-demographic dividend", "IDA total", "IDA blend", "IDA only", 
+  "Sub-Saharan Africa", "Sub-Saharan Africa (IDA & IBRD countries)",
+  "Sub-Saharan Africa (excluding high income)", "Latin America & Caribbean",
+  "Latin America & Caribbean (excluding high income)", "Middle East & North Africa",
+  "Arab World", "European Union", "Euro area", "North America", "OECD members",
+  "St. Vincent and the Grenadines",
+  "South Asia", 
+  "South Asia (IDA & IBRD)", 
+  "South Asia (excluding high income)",
+  "Latin America & the Caribbean (IDA & IBRD countries)",
+  "Latin America & Caribbean (IDA & IBRD countries)",
+  "Middle East & North Africa (IDA & IBRD countries)",
+  "Middle East & North Africa (excluding high income)",
+  "World",
+  "IDA & IBRD total",
+  "IAD & IBRD Total"
+)
+
+# merge, filter, and categorize
+final_df9 <- pop_clean9 %>%
+  inner_join(gni_clean9, by = "Country Code") %>%
+  filter(Age_Dependency >= 10) %>% 
+  filter(!(`Country Name` %in% aggregates_to_drop)) %>%
+  mutate(
+    Income_Group = case_when(
+      is.na(GNI_per_capita) ~ "Unknown",
+      GNI_per_capita <= 1145 ~ "Low income (≤ $1,145)",
+      GNI_per_capita <= 4515 ~ "Lower-middle income ($1,146 - $4,515)",
+      GNI_per_capita <= 14005 ~ "Upper-middle income ($4,516 - $14,005)",
+      TRUE ~ "High income (> $14,005)"
+    )
+  ) %>%
+  filter(!Income_Group %in% c("Unknown", "High income (> $14,005)") | `Country Name` == "World")
+
+# format factor for ordering
+legend_order <- c(
+  "Upper-middle income ($4,516 - $14,005)",
+  "Lower-middle income ($1,146 - $4,515)",
+  "Low income (≤ $1,145)",
+  "High income (> $14,005)", 
+  "Unknown"
+)
+
+final_df9 <- final_df9 %>%
+  mutate(
+    Income_Group = factor(Income_Group, levels = legend_order),
+    `Country Name` = fct_reorder(`Country Name`, Age_Dependency)
+  )
+
+# Find Armenia's position
+armenia_pos <- which(levels(final_df9$`Country Name`) == "Armenia")
+line_position_armenia <- armenia_pos - 0.5
+
+# Find Turkiye's position
+turkiye_pos <- which(levels(final_df9$`Country Name`) %in% c("Turkiye", "Türkiye", "Turkey"))[1]
+line_position_turkiye <- turkiye_pos - 0.5
+
+# Define Color Map
+color_map <- c(
+  "Upper-middle income ($4,516 - $14,005)" = '#D65A31',
+  "Lower-middle income ($1,146 - $4,515)" = "#E9C46A",
+  "Low income (≤ $1,145)" = "#E76F51",
+  "High income (> $14,005)" = "#264653",
+  "Unknown" = "#9E9E9E"
+)
+
+# Create the plot
+my_plot <- ggplot(final_df9, aes(x = Age_Dependency, y = `Country Name`, fill = Income_Group)) +
+  geom_col(width = 0.75) +
+  
+  geom_hline(yintercept = c(line_position_armenia, line_position_turkiye), 
+             color = "#d73027", linetype = "dashed", linewidth = 1) +
+  
+  annotate("text", x = 37, y = line_position_armenia, 
+           label = "20% Old-Age Threshold", color = "#d73027", 
+           fontface = "bold", size = 6, vjust = -0.5, hjust = 1) +
+  
+  annotate("text", x = 37, y = line_position_turkiye, 
+           label = "15% Old-Age Threshold", color = "#d73027", 
+           fontface = "bold", size = 6, vjust = -0.5, hjust = 1) +
+  
+  scale_fill_manual(values = color_map) +
+  
+  scale_x_continuous(breaks = seq(5, 40, by = 5)) +
+  
+  labs(
+    title = "Getting Old Before Getting Rich",
+    subtitle = "Middle-income nations will face mounting economic pressure in the coming decades.",
+    caption = "Source: The World Bank (2024)",
+    x = "Old Age Dependency Ratio (%)",
+    y = NULL,
+    fill = "Income Group Criteria"
+  ) +
+  
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.title = element_text(face = "bold", size = 26, margin = margin(b = 8)),
+    plot.subtitle = element_text(color = "dimgrey", size = 20, margin = margin(b = 15)),
+    plot.caption = element_text(color = "gray", size = 14, face = "bold", hjust = 0, margin = margin(t = 15)),
+    axis.title.x = element_text(face = "bold", size = 18, margin = margin(t = 10)),
+    axis.text.x = element_text(size = 16),
+    axis.text.y = element_text(size = 16, color = "gray20", face = "plain"), 
+    legend.position = "bottom", 
+    legend.justification = "center",
+    legend.title = element_text(face = "bold", size = 16),
+    legend.text = element_text(size = 14),
+    panel.grid.major.y = element_blank(), 
+    panel.grid.minor = element_blank()
+  ) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE))
+
+my_plot
+```

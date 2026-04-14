@@ -1,0 +1,98 @@
+---
+title: "RidgeLine_OADR_Regions_Phacha"
+author: "Phacha"
+date: "2026-04-14"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r demographic-ridge, fig.width=13, fig.height=8, warning=FALSE, message=FALSE}
+# load libraries
+library(tidyverse)
+library(ggridges)
+library(countrycode)
+
+#define path and load data
+path_pop <- '/Users/phacha/Documents/R Projects/Final/POP_DPND.csv'
+df_pop <- read_csv(path_pop, skip = 4, show_col_types = FALSE)
+target_year <- "2024"
+
+# clean and prepare
+df_regions <- df_pop %>%
+  select(`Country Name`, `Country Code`, all_of(target_year)) %>%
+  rename(Dependency_Ratio = all_of(target_year)) %>%
+  filter(!is.na(Dependency_Ratio)) %>%
+  mutate(Region = countrycode(`Country Code`, origin = "iso3c", destination = "region")) %>%
+  filter(!is.na(Region)) %>%
+  mutate(Region = fct_reorder(Region, Dependency_Ratio, .fun = median, .na_rm = TRUE))
+
+# create the ridgeline/joyplot
+ridge_plot <- ggplot(df_regions, aes(x = Dependency_Ratio, y = Region)) +
+  
+  # removed 0 so the curves roll off naturally
+  geom_density_ridges_gradient(
+    aes(fill = after_stat(cut(x, 
+                              breaks = c(-Inf, 15, 20, Inf), 
+                              labels = c("Young (<15%)", "Transitional (15-20%)", "Aging (>20%)")))), 
+    alpha = 0.8, 
+    scale = 1.5, 
+    rel_min_height = 0.01, 
+    color = "#FFE4E1",   #add ligh pink salmon for the line   
+    linewidth = 0.5
+    #color = "transparent"
+  ) +
+  
+  geom_vline(xintercept = c(15, 20), linetype = "dashed", color = "#b22222", linewidth = 0.4) +
+  
+  scale_fill_manual(
+    name = "Demographic Stage:",
+    values = c(
+      "Young (<15%)" = "#F0CFA0", 
+      "Transitional (15-20%)" = "#D48C46", 
+      "Aging (>20%)" = "#5D4037" 
+    ),
+    guide = guide_legend(override.aes = list(shape = 22, size = 5))
+  ) +
+  
+  # scale x axis
+  scale_x_continuous(breaks = c(20, 40, 60, 80)) +
+  
+  labs(
+    title = "Beyond the Average:\nVisualizing the Distribution of Transitional and Aging Populations",
+    subtitle = "Tracking regional shifts toward older populations. The 15% threshold marks the\npreparing stage, while 20% defines an aging society.",
+    x = "Old Age Dependency Ratio (%)",
+    y = NULL,
+    caption = "Source: World Bank 2024"
+  ) +
+  
+  coord_cartesian(xlim = c(0, 85)) +
+  
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title.position = "plot", 
+    plot.title = element_text(face = "bold", size = 18, margin = margin(b = 8), lineheight = 1.2),
+    plot.subtitle = element_text(color = "dimgrey", size = 13, margin = margin(b = 30), lineheight = 1.2),
+    
+    axis.text.y = element_text(face = "bold", size = 14),
+    axis.text.x = element_text(size = 12),
+    
+    #removed all gridlinesfor a clean look
+    panel.grid = element_blank(),
+    
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 12),
+    
+    plot.margin = margin(t = 15, r = 25, b = 15, l = 15)
+    
+    # add bg if want, i let it clean with whie
+    #plot.background = element_rect(fill = "#F9F6F0", color = NA),
+    #panel.background = element_rect(fill = "#F9F6F0", color = NA)
+  )
+
+ridge_plot
+```
